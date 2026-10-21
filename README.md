@@ -2,6 +2,17 @@
 
 Proton Picker is designed to choose a Proton build at Steam launch time. After setup, the player clicks **Play** as usual: Steam starts the Proton Picker compatibility tool, which routes that game's launch to a cached Proton build. A background updater refreshes the per-game choices; there is no version prompt during launch.
 
+Proton Picker is part of [Brlinkin](https://shadoww23.github.io/brlinkin/), a small suite of local-first tools for Linux gaming and game releases.
+
+## Common problems this solves
+
+- Steam keeps launching the same Proton version for every game.
+- Per-game Proton overrides get lost when Steam rewrites its config.
+- A game stops launching after an external games drive is unmounted.
+- You want to pin one Proton build per game without editing Steam settings.
+
+See [docs/PROBLEMS.md](docs/PROBLEMS.md) for checks, logs, and honest limits. GTA IV controller and Dead Space stutter are diagnostic paths, not guaranteed fixes.
+
 ## Requirements
 
 - Linux desktop Steam (Steam Deck/Decky and Flatpak Steam are not yet validated)
@@ -55,3 +66,5 @@ warranty and liability terms.
 
 Proton Picker is not affiliated with Valve Corporation. See
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+More tools: [Brlinkin](https://shadoww23.github.io/brlinkin/) · [ReleaseGuard](https://github.com/Shadoww23/releaseguard).
