@@ -26,7 +26,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "${GITHUB_REF_NAME}" artifacts/*.zip artifacts/*.tar.gz artifacts/*SHA256SUMS.txt
-          --title "Proton Picker ${GITHUB_REF_NAME}"
-          --notes-file CHANGELOG.md
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          TITLE="Proton Picker ${TAG}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/*.zip artifacts/*.tar.gz artifacts/*SHA256SUMS.txt --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes-file CHANGELOG.md
+          else
+            gh release create "$TAG" artifacts/*.zip artifacts/*.tar.gz artifacts/*SHA256SUMS.txt \
+              --title "$TITLE" --notes-file CHANGELOG.md
+          fi
