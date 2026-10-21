@@ -26,6 +26,9 @@ RECOMMENDATION_CACHE: dict[str, dict] = {}
 CACHE_UPDATED = 0.0
 OFFICIAL_PROTON_APP_IDS = {"7": "1887720", "8": "2348590", "9": "2805730",
                            "10": "3658110", "11": "4628710"}
+NON_GAME_APP_IDS = set(OFFICIAL_PROTON_APP_IDS.values()) | {
+    "228980", "1070560", "1391110", "1493710", "1628350", "4183110"}
+NON_GAME_PREFIXES = ("proton ", "steam linux runtime", "steamworks common redistributables")
 
 
 def steam_roots() -> list[Path]:
@@ -163,7 +166,9 @@ def get_library() -> dict:
             if not isinstance(app, dict):
                 continue
             appid, name = str(app.get("appid", "")), str(app.get("name", ""))
-            if not appid or not name or appid == "228980":
+            lowered = name.casefold()
+            if (not appid or not name or appid in NON_GAME_APP_IDS
+                    or lowered.startswith(NON_GAME_PREFIXES)):
                 continue
             games[appid] = {"appid": appid, "name": name, "installdir": app.get("installdir", ""),
                             "oslist": str(app.get("oslist", "windows"))}
