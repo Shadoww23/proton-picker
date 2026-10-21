@@ -1,0 +1,13 @@
+"compatibilitytools"
+{
+	"compat_tools"
+	{
+		"proton-picker"
+		{
+			"install_path" "."
+			"display_name" "Proton Picker (automatic)"
+			"from_oslist" "windows"
+			"to_oslist" "linux"
+		}
+	}
+}

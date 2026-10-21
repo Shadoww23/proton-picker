@@ -1,0 +1,74 @@
+#!/bin/sh
+# Steam compatibility-tool entry point. The updater writes appid<TAB>Proton-path
+# records to selections.tsv and a list of usable builds to fallback-list.txt.
+set -eu
+
+tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+appid=${SteamGameId:-${GAMEID:-${UMU_ID:-${STEAM_COMPAT_APP_ID:-${SteamAppId:-}}}}}
+target=
+
+usable() {
+	[ -n "$1" ] && [ -x "$1" ]
+}
+
+scan_for_proton() {
+	# $1 is 1 to allow preview builds; otherwise prefer stable builds first.
+	allow_all=$1
+	for base in \
+		"${HOME:-}/.local/share/Steam/steamapps/common" \
+		"${HOME:-}/.steam/steam/steamapps/common" \
+		"${HOME:-}/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common" \
+		"${HOME:-}/.local/share/Steam/compatibilitytools.d" \
+		"${HOME:-}/.steam/steam/compatibilitytools.d"; do
+		[ -d "$base" ] || continue
+		for candidate in "$base"/*/proton; do
+			[ -x "$candidate" ] || continue
+			if [ "$allow_all" != 1 ]; then
+				case "$candidate" in
+					*[Ee]xperimental*|*GE-Proton*|*proton-ge*|*Proton-GE*) continue ;;
+				esac
+			fi
+			printf '%s\n' "$candidate"
+			return 0
+		done
+	done
+	return 1
+}
+
+if [ -n "$appid" ] && [ -r "$tool_dir/selections.tsv" ]; then
+	target=$(awk -F '\t' -v id="$appid" '$1 == id { print $2; exit }' "$tool_dir/selections.tsv")
+fi
+usable "$target" || target=
+
+if ! usable "$target" && [ -r "$tool_dir/fallback.txt" ]; then
+	IFS= read -r candidate < "$tool_dir/fallback.txt" || true
+	usable "$candidate" && target=$candidate
+fi
+
+if ! usable "$target" && [ -r "$tool_dir/fallback-list.txt" ]; then
+	while IFS= read -r candidate; do
+		if usable "$candidate"; then
+			target=$candidate
+			break
+		fi
+	done < "$tool_dir/fallback-list.txt"
+fi
+
+if ! usable "$target"; then
+	if candidate=$(scan_for_proton 0); then
+		target=$candidate
+	fi
+fi
+
+if ! usable "$target"; then
+	if candidate=$(scan_for_proton 1); then
+		target=$candidate
+	fi
+fi
+
+if ! usable "$target"; then
+	printf '%s\n' "Proton Picker: no usable Proton build is available for app ${appid:-unknown}." >&2
+	exit 126
+fi
+
+exec "$target" "$@"
