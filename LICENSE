@@ -1,0 +1,65 @@
+Proton Picker Proprietary Freeware License
+Version 1.0
+
+Copyright (c) 2026 Shadoww23. All rights reserved.
+
+This software and its accompanying documentation (the "Software") are made
+available free of charge for personal use, subject to this license. By
+downloading, installing, or using the Software, you agree to these terms. If
+you do not agree, do not use the Software.
+
+1. License grant
+   You are granted a non-exclusive, non-transferable, revocable license to
+   install and use the Software on computers that you own or control.
+
+2. Restrictions
+   You may not:
+   a. sell, rent, lease, sublicense, distribute, publish, or otherwise make the
+      Software available to any third party;
+   b. modify, adapt, translate, or create derivative works of the Software;
+   c. reverse engineer, decompile, or disassemble the Software, except to the
+      extent that applicable law expressly permits despite this restriction;
+   d. remove or alter any copyright, license, or attribution notices;
+   e. use the Software to develop or train a competing product;
+   f. represent that the Software is endorsed by or affiliated with Valve
+      Corporation, the Proton project, or the author without written permission.
+
+3. Steam configuration
+   The Software can change Steam's compatibility-tool configuration and can
+   remove per-game Proton overrides after asking for confirmation. It creates a
+   backup and records removed mappings so they can be restored on uninstall.
+   You are responsible for reviewing backups and for testing the Software before
+   relying on it. Do not use it on a system whose configuration you cannot
+   restore.
+
+4. Ownership
+   The author retains all right, title, and interest in and to the Software,
+   including all intellectual property rights. No rights are granted except as
+   expressly stated in this license.
+
+5. Feedback
+   If you provide suggestions or feedback, you grant the author a perpetual,
+   royalty-free right to use that feedback without obligation.
+
+6. No warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. THE SOFTWARE IS AN
+   ALPHA PROTOTYPE AND MAY CONTAIN DEFECTS.
+
+7. Limitation of liability
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE AUTHOR SHALL NOT BE LIABLE FOR
+   ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT, OR
+   OTHERWISE, ARISING FROM OR RELATED TO THE SOFTWARE OR ITS USE. THIS
+   INCLUDES, WITHOUT LIMITATION, LOSS OF DATA, LOSS OF PROFITS, GAME SAVES, OR
+   BUSINESS INTERRUPTION.
+
+8. Termination
+   This license terminates automatically if you breach its terms. On
+   termination, you must stop using the Software and delete all copies.
+
+9. Entire agreement
+   This license is the entire agreement concerning the Software and supersedes
+   any prior or contemporaneous statements about it.
+
+Contact: Shadoww23 on GitHub.

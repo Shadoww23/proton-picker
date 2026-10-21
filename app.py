@@ -21,6 +21,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent
+VERSION = "0.1.0-alpha"
 RECOMMENDATION_CACHE: dict[str, dict] = {}
 CACHE_UPDATED = 0.0
 OFFICIAL_PROTON_APP_IDS = {"7": "1887720", "8": "2348590", "9": "2805730",
@@ -776,6 +777,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    if "--version" in sys.argv:
+        print(f"Proton Picker {VERSION}")
+        return
     if "--background" in sys.argv:
         lock_base = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))
         lock_base.mkdir(parents=True, exist_ok=True)

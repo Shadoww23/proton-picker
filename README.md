@@ -2,9 +2,21 @@
 
 Proton Picker is designed to choose a Proton build at Steam launch time. After setup, the player clicks **Play** as usual: Steam starts the Proton Picker compatibility tool, which routes that game's launch to a cached Proton build. A background updater refreshes the per-game choices; there is no version prompt during launch.
 
+## Requirements
+
+- Linux desktop Steam (Steam Deck/Decky and Flatpak Steam are not yet validated)
+- Python 3.10 or newer
+- At least one Proton build installed in Steam
+
 ## Setup
 
-Close Steam and run this once on Linux desktop Steam:
+Close Steam and run this once:
+
+```sh
+./install.sh
+```
+
+or:
 
 ```sh
 python3 install.py
@@ -33,3 +45,13 @@ The local dashboard (`python3 app.py`) is optional. It lists the library, shows 
 - The updater currently routes only to Proton builds that are already installed. It does not install missing Proton versions automatically.
 
 Run `python3 uninstall.py` with Steam closed to remove the tool, restore the previous global Steam choice when Proton Picker still owns that setting, and restore per-game overrides removed during setup. The uninstaller leaves a later Steam default change untouched.
+
+## License and price
+
+Proton Picker 0.1 is free to download and use under the proprietary freeware
+terms in [LICENSE](LICENSE): no redistribution, modification, or resale.
+Donations are optional. The alpha is provided as-is; see the license for the
+warranty and liability terms.
+
+Proton Picker is not affiliated with Valve Corporation. See
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
