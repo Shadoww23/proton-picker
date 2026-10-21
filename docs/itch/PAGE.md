@@ -24,6 +24,21 @@ evidence behind it, or the newest installed official Proton.
 No version prompt. No editing Steam Play settings for every game. No hosted
 account.
 
+Part of [Brlinkin](https://shadoww23.github.io/brlinkin/), a small suite of
+local-first tools for Linux gaming and game releases.
+
+### Common problems it addresses
+
+- Steam launches the same Proton version for every game.
+- Per-game Proton overrides disappear when Steam rewrites its config.
+- A game stops launching after an external games drive is unmounted.
+- You want to pin one Proton build per game without editing Steam settings.
+
+Full checks, log paths, and limits:
+[Proton Picker troubleshooting](https://github.com/Shadoww23/proton-picker/blob/main/docs/PROBLEMS.md).
+GTA IV controller and Dead Space stutter are diagnostic paths, not guaranteed
+fixes.
+
 ### What it does
 
 - Routes Steam Windows-game launches through an installed Proton build.
