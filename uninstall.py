@@ -19,8 +19,10 @@ def uninstall() -> int:
     if config and config.is_file():
         try:
             result = app.restore_default_compatibility_tool(
-                config, "proton-picker", installation.get("original_default_mapping"))
-            print("Restored the previous Steam default." if result["changed"] else result["reason"])
+                config, "proton-picker", installation.get("original_default_mapping"),
+                installation.get("original_overrides"))
+            print("Restored the previous Steam default and per-game overrides."
+                  if result["changed"] else result["reason"])
         except (OSError, ValueError, app.SteamRunningError) as exc:
             print(f"Could not restore Steam's default: {exc}", file=sys.stderr)
             return 1

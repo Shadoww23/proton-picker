@@ -1,4 +1,3 @@
-import json
 import tempfile
 import time
 import unittest
@@ -92,85 +91,38 @@ class RecommendationTests(unittest.TestCase):
                     config, "proton-picker", {"name": "proton_11", "config": "", "priority": "75"})
             self.assertFalse(skipped["changed"])
             self.assertEqual(app.compat_mapping(app.parse_vdf(config))["0"]["name"], "user-choice")
-
-    def test_auto_apply_preserves_manual_setting_and_can_undo(self):
+    def test_setup_can_remove_overrides_and_uninstall_restores_them(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "Steam"
-            steamapps = root / "steamapps"
-            (steamapps / "common/Proton 10.0").mkdir(parents=True)
-            (steamapps / "appmanifest_100.acf").write_text(
-                '"AppState" { "appid" "100" "name" "Manual Game" "oslist" "windows" }')
-            (steamapps / "appmanifest_200.acf").write_text(
-                '"AppState" { "appid" "200" "name" "Auto Game" "oslist" "windows" }')
-            config = root / "config/config.vdf"
-            config.parent.mkdir(parents=True)
+            config = Path(tmp) / "config.vdf"
             config.write_text('"InstallConfigStore" { "Software" { "Valve" { "Steam" { '
-                              '"CompatToolMapping" { "100" { "name" "manual_tool" "config" "" "priority" "250" } }'
-                              '} } } }')
-            state_file = Path(tmp) / "state.json"
-            with patch.object(app, "steam_roots", return_value=[root]), \
-                 patch.object(app, "state_path", return_value=state_file), \
-                 patch.object(app, "steam_running", return_value=False), \
-                 patch.object(app, "install_autostart"):
-                applied = app.apply_recommendations({
-                    "100": {"tool": "proton_10", "version": "Proton 10.0"},
-                    "200": {"tool": "proton_10", "version": "Proton 10.0"},
-                })
-                self.assertEqual(applied["applied"], 1)
-                self.assertEqual(applied["skipped"], 1)
-                mapping = app.compat_mapping(app.parse_vdf(config))
-                self.assertEqual(mapping["100"]["name"], "manual_tool")
-                self.assertEqual(mapping["200"]["name"], "proton_10")
-                self.assertTrue(config.with_suffix(".vdf.proton-picker-backup").exists())
-                app.disable_auto()
-                mapping = app.compat_mapping(app.parse_vdf(config))
-                self.assertEqual(mapping["100"]["name"], "manual_tool")
-                self.assertNotIn("200", mapping)
+                              '"CompatToolMapping" { "0" { "name" "proton_11" "config" "" "priority" "75" } '
+                              '"100" { "name" "manual_tool" "config" "" "priority" "250" } } } } } }')
+            original = {"name": "proton_11", "config": "", "priority": "75"}
+            with patch.object(app, "steam_running", return_value=False):
+                result = app.set_default_compatibility_tool(
+                    config, "proton-picker", clear_overrides=True)
+            self.assertEqual(app.compat_mapping(app.parse_vdf(config))["0"]["name"], "proton-picker")
+            self.assertNotIn("100", app.compat_mapping(app.parse_vdf(config)))
+            self.assertEqual(result["removed"]["100"]["name"], "manual_tool")
 
-    def test_missing_recommended_tool_is_requested_from_steam(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "Steam"
-            steamapps = root / "steamapps"
-            (steamapps / "common/Proton 9.0").mkdir(parents=True)
-            (steamapps / "appmanifest_200.acf").write_text(
-                '"AppState" { "appid" "200" "name" "Auto Game" "oslist" "windows" }')
-            (root / "config/config.vdf").parent.mkdir(parents=True)
-            (root / "config/config.vdf").write_text('"InstallConfigStore" {}')
-            state_file = Path(tmp) / "state.json"
-            with patch.object(app, "steam_roots", return_value=[root]), \
-                 patch.object(app, "state_path", return_value=state_file), \
-                 patch.object(app, "steam_running", return_value=False), \
-                 patch.object(app, "install_autostart"), \
-                 patch.object(app, "request_steam_install") as request:
-                result = app.apply_recommendations({
-                    "200": {"tool": "proton_10", "version": "Proton 10.0", "installer_appid": "3658110"}
-                })
-            self.assertEqual(result["status"], "installing")
-            request.assert_called_once_with("3658110")
-            self.assertFalse(app.compat_mapping(app.parse_vdf(root / "config/config.vdf")))
-
-    def test_manual_reset_of_auto_mapping_is_respected(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "Steam"
-            steamapps = root / "steamapps"
-            (steamapps / "common/Proton 10.0").mkdir(parents=True)
-            (steamapps / "appmanifest_200.acf").write_text(
-                '"AppState" { "appid" "200" "name" "Auto Game" "oslist" "windows" }')
-            config = root / "config/config.vdf"
-            config.parent.mkdir(parents=True)
-            # The user removed the mapping that Auto Mode had previously set.
-            config.write_text('"InstallConfigStore" { "Software" { "Valve" { "Steam" { "CompatToolMapping" {} } } } }')
-            state_file = Path(tmp) / "state.json"
-            state_file.write_text(json.dumps({"enabled": True, "managed": {"200": "proton_9"}}))
-            with patch.object(app, "steam_roots", return_value=[root]), \
-                 patch.object(app, "state_path", return_value=state_file), \
-                 patch.object(app, "steam_running", return_value=False), \
-                 patch.object(app, "install_autostart"):
-                app.apply_recommendations({"200": {"tool": "proton_10", "version": "Proton 10.0"}})
+            with patch.object(app, "steam_running", return_value=False):
+                app.restore_default_compatibility_tool(
+                    config, "proton-picker", original, result["removed"])
             mapping = app.compat_mapping(app.parse_vdf(config))
-            state = json.loads(state_file.read_text())
-            self.assertNotIn("200", mapping)
-            self.assertIn("200", state["manual_opt_out"])
+            self.assertEqual(mapping["0"]["name"], "proton_11")
+            self.assertEqual(mapping["100"]["name"], "manual_tool")
+
+    def test_clearing_overrides_still_runs_when_picker_is_already_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config.vdf"
+            config.write_text('"InstallConfigStore" { "Software" { "Valve" { "Steam" { '
+                              '"CompatToolMapping" { "0" { "name" "proton-picker" "config" "" "priority" "75" } '
+                              '"100" { "name" "manual_tool" "config" "" "priority" "250" } } } } } }')
+            with patch.object(app, "steam_running", return_value=False):
+                result = app.set_default_compatibility_tool(
+                    config, "proton-picker", clear_overrides=True)
+            self.assertTrue(result["changed"])
+            self.assertNotIn("100", app.compat_mapping(app.parse_vdf(config)))
 
 
 if __name__ == "__main__":

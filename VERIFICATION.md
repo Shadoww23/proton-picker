@@ -48,7 +48,16 @@ excluding the Proton Picker shim itself. Tests confirm that:
 - a last-resort scan finds a Steam-installed Proton,
 - the shim fails with exit 126 when nothing usable exists.
 
-19 unit tests pass (`python3 -m unittest test_proton.py test_dispatcher.py`).
+20 unit tests pass (`python3 -m unittest test_proton.py test_dispatcher.py`).
+
+## Update: override management and pins
+
+The installer now asks whether to remove per-game overrides (default: remove)
+and records them in `state.json` for uninstall. Tests cover removal, restoration,
+clearing when Proton Picker is already the default, pin precedence over
+recommendations, and official-stable fallback ordering ahead of GE builds.
+The earlier "overrides are preserved" observation describes the pre-update
+installer; it is kept here as a record of that run.
 
 ## Not verified
 

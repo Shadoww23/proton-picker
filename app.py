@@ -213,35 +213,47 @@ def dispatcher_dir() -> Path | None:
     return None
 
 
+def official_rank(internal: str) -> tuple[int, int, str]:
+    """Sort official stable Proton builds first, newest major version leading."""
+    match = re.fullmatch(r"proton_(\d+)", internal or "")
+    if match:
+        return (0, -int(match.group(1)), internal.casefold())
+    if internal == "proton_experimental":
+        return (1, 0, internal.casefold())
+    return (2, 0, internal.casefold())
+
+
 def fallback_candidates(library: dict) -> list[str]:
-    """List usable Proton launchers, baseline first, so one missing drive is not fatal."""
+    """List usable Proton launchers, newest official stable build first."""
     paths = library.get("tool_paths", {})
-    ids = library.get("tool_ids", {})
-    base = paths.get(ids.get(library.get("baseline", "")))
     ordered: list[str] = []
 
     def usable(path: str | None) -> bool:
         return bool(path) and Path(path).is_file() and os.access(path, os.X_OK)
 
-    if usable(base):
-        ordered.append(base)
-    def rank(item: tuple[str, str]):
-        name = item[0].casefold()
-        return ("experimental" in name, "ge-proton" in name or "proton-ge" in name, name)
-    for _, path in sorted(paths.items(), key=rank):
+    for internal, path in sorted(paths.items(), key=lambda item: official_rank(item[0])):
         if usable(path) and path not in ordered:
             ordered.append(path)
     return ordered
 
 
+def fallback_chain(library: dict, tool_dir: Path | None = None) -> list[str]:
+    """Fallback launchers in order, never including Proton Picker's own shim."""
+    candidates = fallback_candidates(library)
+    tool_dir = tool_dir or dispatcher_dir()
+    if tool_dir:
+        own_shim = (tool_dir / "proton").resolve()
+        candidates = [path for path in candidates
+                      if Path(path).resolve() != own_shim
+                      and own_shim.parent not in Path(path).resolve().parents]
+    return candidates
+
+
 def write_dispatcher_cache(recommendations: dict[str, dict], library: dict,
-                           tool_dir: Path) -> dict:
+                           tool_dir: Path, pins: dict[str, str] | None = None) -> dict:
     """Refresh the launch-time cache without editing Steam's per-game mappings."""
     paths = library.get("tool_paths", {})
-    own_shim = (tool_dir / "proton").resolve()
-    candidates = [path for path in fallback_candidates(library)
-                  if Path(path).resolve() != own_shim
-                  and own_shim.parent not in Path(path).resolve().parents]
+    candidates = fallback_chain(library, tool_dir)
     if not candidates:
         log_event("sync failed: no installed Proton launcher is available as a fallback")
         return {"status": "error", "selected": 0,
@@ -249,20 +261,25 @@ def write_dispatcher_cache(recommendations: dict[str, dict], library: dict,
     fallback = candidates[0]
     game_ids = {g["appid"] for g in library.get("games", [])
                 if "windows" in g.get("oslist", "windows").casefold()}
-    records = []
+    records: dict[str, str] = {}
+    for appid, tool in (pins or {}).items():
+        target = paths.get(tool)
+        if appid in game_ids and target and os.access(target, os.X_OK):
+            records[appid] = target
     for appid, recommendation in recommendations.items():
-        if appid not in game_ids or not recommendation:
+        if appid not in game_ids or not recommendation or appid in records:
             continue
         target = paths.get(recommendation.get("tool"))
         if target and os.access(target, os.X_OK):
-            records.append(f"{appid}\t{target}")
+            records[appid] = target
+    lines = [f"{appid}\t{target}" for appid, target in sorted(records.items())]
     tool_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write(tool_dir / "selections.tsv", "\n".join(sorted(records)) + "\n")
+    atomic_write(tool_dir / "selections.tsv", "\n".join(lines) + "\n")
     atomic_write(tool_dir / "fallback.txt", fallback + "\n")
     atomic_write(tool_dir / "fallback-list.txt", "\n".join(candidates) + "\n")
-    return {"status": "updated", "selected": len(records), "fallback": fallback,
-            "fallback_count": len(candidates),
-            "message": f"Refreshed {len(records)} automatic game choices."}
+    return {"status": "updated", "selected": len(records), "pinned": len(pins or {}),
+            "fallback": fallback, "fallback_count": len(candidates),
+            "message": f"Refreshed {len(records)} game choices."}
 
 
 def atomic_write(path: Path, content: str) -> None:
@@ -285,8 +302,8 @@ def sync_dispatcher(recommendations: dict[str, dict] | None = None) -> dict:
     library = get_library()
     if recommendations is None:
         recommendations = RECOMMENDATION_CACHE if time.time() - CACHE_UPDATED < 900 else fetch_recommendations()
-    result = write_dispatcher_cache(recommendations, library, tool_dir)
     state = load_state()
+    result = write_dispatcher_cache(recommendations, library, tool_dir, state.get("pins", {}))
     if result["status"] == "not-installed":
         state["enabled"] = False
     elif result["status"] == "updated":
@@ -297,6 +314,24 @@ def sync_dispatcher(recommendations: dict[str, dict] | None = None) -> dict:
         install_autostart(True)
     log_event(f"sync {result['status']}: {result.get('message', '')}")
     return result
+
+
+def set_pin(appid: str, tool: str | None) -> dict:
+    """Pin a game to an installed build, or clear its pin when tool is empty."""
+    library = get_library()
+    state = load_state()
+    pins = state.setdefault("pins", {})
+    appid = str(appid)
+    if tool:
+        if tool not in library.get("tool_paths", {}):
+            return {"status": "error", "message": "That Proton build is not installed."}
+        pins[appid] = tool
+    else:
+        pins.pop(appid, None)
+    save_state(state)
+    result = sync_dispatcher()
+    log_event(f"pin {appid} -> {tool or 'auto'}")
+    return {"status": "pinned" if tool else "unpinned", "pins": pins, "sync": result}
 
 
 def tool_sort_key(name: str):
@@ -512,23 +547,7 @@ def dump_vdf(tree: dict, indent: int = 0) -> str:
     return "\n".join(lines) + "\n"
 
 
-def set_default_compatibility_tool(config_file: Path, tool_name: str) -> dict:
-    """Set Steam's default tool while retaining per-game overrides and a backup."""
-    if steam_running():
-        raise SteamRunningError("Close Steam before changing its default compatibility tool.")
-    if not config_file.is_file():
-        raise FileNotFoundError(f"Steam config not found: {config_file}")
-    tree = parse_vdf(config_file)
-    if not tree:
-        raise ValueError("Steam config could not be parsed; left it unchanged.")
-    mapping = ensure_compat_mapping(tree)
-    original = mapping.get("0")
-    if isinstance(original, dict) and original.get("name") == tool_name:
-        return {"changed": False, "original": original, "backup": None}
-    backup = config_file.with_name(f"{config_file.name}.proton-picker-backup-{time.time_ns()}")
-    shutil.copy2(config_file, backup)
-    priority = original.get("priority", "75") if isinstance(original, dict) else "75"
-    mapping["0"] = {"name": tool_name, "config": "", "priority": str(priority)}
+def _write_config(config_file: Path, tree: dict) -> None:
     fd, temp_name = tempfile.mkstemp(prefix="config.vdf.", dir=config_file.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -539,11 +558,38 @@ def set_default_compatibility_tool(config_file: Path, tool_name: str) -> dict:
         os.replace(temp_name, config_file)
     finally:
         Path(temp_name).unlink(missing_ok=True)
-    return {"changed": True, "original": original, "backup": str(backup)}
+
+
+def set_default_compatibility_tool(config_file: Path, tool_name: str,
+                                   clear_overrides: bool = False) -> dict:
+    """Set Steam's default tool, optionally removing all per-game overrides."""
+    if steam_running():
+        raise SteamRunningError("Close Steam before changing its default compatibility tool.")
+    if not config_file.is_file():
+        raise FileNotFoundError(f"Steam config not found: {config_file}")
+    tree = parse_vdf(config_file)
+    if not tree:
+        raise ValueError("Steam config could not be parsed; left it unchanged.")
+    mapping = ensure_compat_mapping(tree)
+    original = mapping.get("0")
+    already_owned = isinstance(original, dict) and original.get("name") == tool_name
+    removed = {}
+    if clear_overrides:
+        removed = {appid: mapping.pop(appid) for appid in list(mapping) if appid != "0"}
+    if already_owned and not removed:
+        return {"changed": False, "original": original, "backup": None, "removed": {}}
+    backup = config_file.with_name(f"{config_file.name}.proton-picker-backup-{time.time_ns()}")
+    shutil.copy2(config_file, backup)
+    if not already_owned:
+        priority = original.get("priority", "75") if isinstance(original, dict) else "75"
+        mapping["0"] = {"name": tool_name, "config": "", "priority": str(priority)}
+    _write_config(config_file, tree)
+    return {"changed": True, "original": original, "backup": str(backup), "removed": removed}
 
 
 def restore_default_compatibility_tool(config_file: Path, tool_name: str,
-                                       original: dict | None) -> dict:
+                                       original: dict | None,
+                                       restore_overrides: dict | None = None) -> dict:
     """Restore a prior global choice only if Proton Picker still owns it."""
     if steam_running():
         raise SteamRunningError("Close Steam before restoring its default compatibility tool.")
@@ -558,16 +604,9 @@ def restore_default_compatibility_tool(config_file: Path, tool_name: str,
         mapping.pop("0", None)
     else:
         mapping["0"] = original
-    fd, temp_name = tempfile.mkstemp(prefix="config.vdf.", dir=config_file.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            stream.write(dump_vdf(tree))
-            stream.flush()
-            os.fsync(stream.fileno())
-        shutil.copymode(config_file, temp_name)
-        os.replace(temp_name, config_file)
-    finally:
-        Path(temp_name).unlink(missing_ok=True)
+    for appid, entry in (restore_overrides or {}).items():
+        mapping.setdefault(appid, entry)
+    _write_config(config_file, tree)
     return {"changed": True}
 
 
@@ -589,9 +628,12 @@ def complete_pending_setup() -> bool:
         state["setup_skipped_user_change"] = True
         save_state(state)
         return False
-    selected = set_default_compatibility_tool(config_file, "proton-picker")
+    selected = set_default_compatibility_tool(
+        config_file, "proton-picker", clear_overrides=bool(state.get("clear_overrides")))
     if selected.get("backup"):
         installation["config_backup"] = selected["backup"]
+    if selected.get("removed"):
+        installation.setdefault("original_overrides", {}).update(selected["removed"])
     state["installation"] = installation
     state["pending_setup"] = False
     state["default_tool_installed"] = True
@@ -601,154 +643,6 @@ def complete_pending_setup() -> bool:
 
 class SteamRunningError(RuntimeError):
     pass
-
-
-def request_steam_install(appid: str) -> bool:
-    uri = f"steam://install/{appid}"
-    for command in (["steam", uri], ["xdg-open", uri]):
-        if not shutil.which(command[0]):
-            continue
-        try:
-            subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             start_new_session=True)
-            return True
-        except OSError:
-            continue
-    return False
-
-
-def apply_recommendations(recommendations: dict[str, dict]) -> dict:
-    """Apply supported recommendations while preserving manual game choices."""
-    library = get_library()
-    installed_ids = set(library["tool_ids"].values())
-    state = load_state()
-    requests = state.setdefault("install_requests", {})
-    missing = {}
-    for recommendation in recommendations.values():
-        if not recommendation or recommendation.get("tool") in installed_ids:
-            continue
-        installer = recommendation.get("installer_appid")
-        if installer:
-            missing[recommendation["tool"]] = str(installer)
-    if missing:
-        for tool, appid in missing.items():
-            last_request = float(requests.get(tool, 0) or 0)
-            if time.time() - last_request > 43200:
-                request_steam_install(appid)
-                requests[tool] = time.time()
-        state["enabled"], state["pending"] = True, True
-        save_state(state)
-        install_autostart(True)
-        return {"status": "installing", "applied": 0, "skipped": len(recommendations),
-                "message": f"Asked Steam to install {len(missing)} recommended Proton version(s). Auto mode will finish after installation."}
-    if steam_running():
-        state["enabled"], state["pending"] = True, True
-        save_state(state)
-        install_autostart(True)
-        return {"status": "queued", "applied": 0, "skipped": len(recommendations),
-                "message": "Steam is open. Recommendations are queued until Steam closes."}
-    roots = steam_roots()
-    config_file, tree = steam_config_tree(roots)
-    if not config_file:
-        return {"status": "error", "applied": 0, "skipped": len(recommendations), "message": "Steam config was not found."}
-    mapping = ensure_compat_mapping(tree)
-    managed = state.setdefault("managed", {})
-    manual_opt_out = set(state.setdefault("manual_opt_out", []))
-    game_by_id = {game["appid"]: game for game in library["games"]}
-    applied = skipped = restored = 0
-    for appid, managed_name in list(managed.items()):
-        current = mapping.get(appid)
-        current_name = current.get("name") if isinstance(current, dict) else None
-        if current_name != managed_name:
-            managed.pop(appid, None)
-            manual_opt_out.add(appid)
-        elif appid in recommendations and recommendations.get(appid) is None:
-            mapping.pop(appid, None)
-            managed.pop(appid, None)
-            restored += 1
-    for appid, recommendation in recommendations.items():
-        if appid in manual_opt_out or not recommendation or not recommendation.get("tool") or appid not in game_by_id:
-            skipped += 1
-            continue
-        game = game_by_id[appid]
-        if "windows" not in game.get("oslist", "windows").casefold():
-            skipped += 1
-            continue
-        current = mapping.get(appid)
-        current_name = current.get("name") if isinstance(current, dict) else None
-        managed_name = managed.get(appid)
-        if current_name and not managed_name:
-            skipped += 1
-            continue
-        if managed_name and current_name != managed_name:
-            # A user changed the Steam setting after auto mode was enabled.
-            managed.pop(appid, None)
-            skipped += 1
-            continue
-        wanted = str(recommendation["tool"])
-        if current_name == wanted:
-            managed[appid] = wanted
-            continue
-        if appid not in mapping:
-            mapping[appid] = {"name": wanted, "config": "", "priority": "250"}
-        else:
-            mapping[appid]["name"] = wanted
-        managed[appid] = wanted
-        applied += 1
-    if applied or restored:
-        backup = config_file.with_suffix(".vdf.proton-picker-backup")
-        shutil.copy2(config_file, backup)
-        fd, temp_name = tempfile.mkstemp(prefix="config.vdf.", dir=config_file.parent)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                stream.write(dump_vdf(tree))
-                stream.flush()
-                os.fsync(stream.fileno())
-            shutil.copymode(config_file, temp_name)
-            os.replace(temp_name, config_file)
-        finally:
-            Path(temp_name).unlink(missing_ok=True)
-    state["enabled"], state["pending"], state["last_sync"] = True, False, time.time()
-    state["manual_opt_out"] = sorted(manual_opt_out)
-    save_state(state)
-    install_autostart(True)
-    return {"status": "applied", "applied": applied, "restored": restored, "skipped": skipped,
-            "message": f"Set {applied} recommendations, returned {restored} games to Steam default, and left {skipped} unchanged."}
-
-
-def disable_auto() -> dict:
-    state = load_state()
-    state["enabled"] = False
-    if steam_running():
-        state["pending_disable"] = True
-        save_state(state)
-        return {"status": "queued", "message": "Auto mode will turn off after Steam closes."}
-    roots = steam_roots()
-    config_file, tree = steam_config_tree(roots)
-    restored = 0
-    if config_file:
-        mapping = compat_mapping(tree)
-        for appid, name in state.get("managed", {}).items():
-            current = mapping.get(appid)
-            if isinstance(current, dict) and current.get("name") == name:
-                mapping.pop(appid, None)
-                restored += 1
-        if restored:
-            shutil.copy2(config_file, config_file.with_suffix(".vdf.proton-picker-backup"))
-            fd, temp_name = tempfile.mkstemp(prefix="config.vdf.", dir=config_file.parent)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                    stream.write(dump_vdf(tree))
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                shutil.copymode(config_file, temp_name)
-                os.replace(temp_name, config_file)
-            finally:
-                Path(temp_name).unlink(missing_ok=True)
-    state["managed"], state["manual_opt_out"], state["pending_disable"] = {}, [], False
-    save_state(state)
-    install_autostart(False)
-    return {"status": "disabled", "restored": restored, "message": f"Auto mode off; restored {restored} managed games to Steam default."}
 
 
 def background_worker() -> None:
@@ -794,7 +688,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/library":
-            body = json.dumps(get_library()).encode()
+            library = get_library()
+            library["pins"] = load_state().get("pins", {})
+            chain = fallback_chain(library)
+            if chain:
+                internal = next((key for key, value in library.get("tool_paths", {}).items()
+                                 if value == chain[0]), "")
+                names = {internal_id: display for display, internal_id
+                         in library.get("tool_ids", {}).items()}
+                library["fallback"] = {"tool": internal,
+                                       "name": names.get(internal, internal)}
+            body = json.dumps(library).encode()
             return self.send(200, body, "application/json; charset=utf-8")
         if parsed.path == "/api/recommendations":
             result = fetch_recommendations()
@@ -837,11 +741,23 @@ class Handler(BaseHTTPRequestHandler):
         self.send(404, b"Not found", "text/plain")
 
     def do_POST(self):
-        if urlparse(self.path).path != "/api/auto":
+        route = urlparse(self.path).path
+        if route not in ("/api/auto", "/api/pin"):
             return self.send(404, b"Not found", "text/plain")
         try:
             length = min(int(self.headers.get("Content-Length", "0")), 4096)
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if route == "/api/pin":
+                appid = str(payload.get("appid", "")).strip()
+                if not appid.isdigit():
+                    raise ValueError("A numeric Steam app id is required.")
+                result = set_pin(appid, payload.get("tool") or None)
+                if result["status"] == "error":
+                    return self.send(400, json.dumps(result).encode(),
+                                     "application/json; charset=utf-8")
+                result["state"] = load_state()
+                return self.send(200, json.dumps(result).encode(),
+                                 "application/json; charset=utf-8")
             enabled = bool(payload.get("enabled"))
             if enabled:
                 result = sync_dispatcher()

@@ -126,6 +126,41 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(result["fallback"], str(self.build))
         self.assertNotIn(str(shim), (tool_dir / "fallback-list.txt").read_text())
 
+    def test_fallback_prefers_official_stable_over_third_party(self):
+        ge = Path(self.temp.name) / "GE-Proton11-7" / "proton"
+        ge.parent.mkdir()
+        ge.write_text("#!/bin/sh\nexit 0\n")
+        ge.chmod(0o755)
+        tool_dir = Path(self.temp.name) / "installed-picker"
+        library = {
+            "games": [],
+            "tool_ids": {"GE-Proton11-7": "GE-Proton11-7", "Proton 10.0": "proton_10"},
+            "tool_paths": {"GE-Proton11-7": str(ge), "proton_10": str(self.build)},
+            "baseline": "GE-Proton11-7",
+        }
+        result = app.write_dispatcher_cache({}, library, tool_dir)
+        self.assertEqual(result["fallback"], str(self.build))
+        self.assertEqual((tool_dir / "fallback.txt").read_text(), f"{self.build}\n")
+
+    def test_pins_override_recommendations_and_unknown_tools_are_ignored(self):
+        pinned = Path(self.temp.name) / "pinned-proton"
+        pinned.write_text("#!/bin/sh\nexit 0\n")
+        pinned.chmod(0o755)
+        tool_dir = Path(self.temp.name) / "installed-picker"
+        library = {
+            "games": [{"appid": "123", "oslist": "windows"},
+                      {"appid": "456", "oslist": "windows"}],
+            "tool_ids": {"Proton 11.0": "proton_11", "Proton 9.0": "proton_9"},
+            "tool_paths": {"proton_11": str(self.build), "proton_9": str(pinned)},
+            "baseline": "Proton 11.0",
+        }
+        result = app.write_dispatcher_cache(
+            {"123": {"tool": "proton_11"}, "456": {"tool": "proton_11"}}, library, tool_dir,
+            {"123": "proton_9", "456": "removed-build"})
+        self.assertEqual(result["pinned"], 2)
+        self.assertEqual((tool_dir / "selections.tsv").read_text(),
+                         f"123\t{pinned}\n456\t{self.build}\n")
+
     def test_cache_routes_only_games_with_installed_recommended_builds(self):
         tool_dir = Path(self.temp.name) / "installed-picker"
         library = {

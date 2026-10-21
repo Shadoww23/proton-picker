@@ -2,6 +2,7 @@
 """Install Proton Picker's Steam launch shim and background updater."""
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -16,7 +17,27 @@ def desktop_quote(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def should_clear_overrides() -> bool:
+    parser = argparse.ArgumentParser(description="Install Proton Picker.")
+    choice = parser.add_mutually_exclusive_group()
+    choice.add_argument("--clear-overrides", action="store_true",
+                        help="remove Steam's per-game Proton overrides")
+    choice.add_argument("--keep-overrides", action="store_true",
+                        help="keep Steam's per-game Proton overrides")
+    args = parser.parse_args()
+    if args.clear_overrides:
+        return True
+    if args.keep_overrides:
+        return False
+    if not sys.stdin.isatty():
+        return False
+    answer = input("Remove existing per-game Proton overrides so Proton Picker manages "
+                   "every game? [Y/n] ").strip().lower()
+    return answer in ("", "y", "yes")
+
+
 def install() -> int:
+    clear_overrides = should_clear_overrides()
     roots = app.steam_roots()
     if not roots:
         print("Steam was not found. Install Steam and run this setup again.", file=sys.stderr)
@@ -58,7 +79,8 @@ def install() -> int:
     # Seed a safe route before Steam can invoke the compatibility tool.
     app.write_dispatcher_cache({}, library, steam_tool)
     state = app.load_state()
-    state.update({"enabled": True, "last_sync": 0, "dispatcher_dir": str(steam_tool)})
+    state.update({"enabled": True, "last_sync": 0, "dispatcher_dir": str(steam_tool),
+                  "clear_overrides": clear_overrides})
     installation = state.setdefault("installation", {})
     if "original_default_mapping" not in installation:
         installation["original_default_mapping"] = app.compat_mapping(tree).get("0")
@@ -76,7 +98,8 @@ def install() -> int:
                          encoding="utf-8")
 
     try:
-        result = app.write_dispatcher_cache(app.fetch_recommendations(), app.get_library(), steam_tool)
+        result = app.write_dispatcher_cache(app.fetch_recommendations(), app.get_library(), steam_tool,
+                                            app.load_state().get("pins", {}))
         print(result["message"])
         state = app.load_state()
         state["last_sync"] = time.time()
@@ -107,7 +130,13 @@ def install() -> int:
         print("Steam is open. The updater will set Proton Picker as default after Steam closes; restart Steam once after that.")
     else:
         print("Steam's default choice could not be updated. Check the config file and rerun setup.")
-    print("Per-game Proton overrides remain untouched.")
+    if app.load_state().get("pending_setup"):
+        print("Per-game overrides will be " + ("removed" if clear_overrides else "kept")
+              + " when Steam closes.")
+    elif clear_overrides:
+        print("Per-game Proton overrides were removed and saved so uninstall can restore them.")
+    else:
+        print("Per-game Proton overrides were kept.")
     return 0
 
 
