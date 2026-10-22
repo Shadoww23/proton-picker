@@ -15,7 +15,7 @@ creates a GitHub release.
 
 ## itch.io
 
-Draft project: <https://brlinkin.itch.io/proton-picker> (Linux, free).
+Live: <https://brlinkin.itch.io/proton-picker> (Linux, free with donations).
 
 Build channel pushed:
 
@@ -23,14 +23,8 @@ Build channel pushed:
 butler push dist/ProtonPicker-0.1.0-alpha.zip Brlinkin/proton-picker:linux --userversion 0.1.0-alpha
 ```
 
-Remaining in the itch.io editor before publishing:
-
-1. Confirm the project type/classification is a tool, not a game.
-2. Confirm platform Linux and price free with donations enabled.
-3. Paste the page copy from `PAGE.md`, including the Brlinkin suite link.
-4. Upload `cover.png`, `icon.png`, and `dashboard.png`.
-5. Add the alpha warning and non-affiliation disclaimer.
-6. Test the download from a logged-out browser, then publish.
+Published with classification Tool, page copy from `PAGE.md`, the Brlinkin
+suite link, cover/icon/screenshot, and the alpha/non-affiliation disclaimers.
 
 ## Before each release
 
