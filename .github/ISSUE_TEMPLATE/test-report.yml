@@ -1,0 +1,75 @@
+name: Alpha test report
+description: Report what happened when you installed, launched, or removed Proton Picker.
+title: "[Test] "
+labels: ["test-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing the alpha. Please do not paste Steam credentials, tokens, or personal paths you do not want public.
+  - type: dropdown
+    id: area
+    attributes:
+      label: What did you test?
+      options:
+        - Install / setup
+        - Launch routing (no pin)
+        - Per-game pin
+        - Fallback when a drive or build is missing
+        - Dashboard
+        - Uninstall / config restore
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game (if relevant)
+      placeholder: "Name and Steam app ID, e.g. Grand Theft Auto IV (12210)"
+  - type: dropdown
+    id: source
+    attributes:
+      label: How did you find this?
+      options:
+        - itch.io
+        - GitHub
+        - Reddit
+        - GamingOnLinux / Boiling Steam / Phoronix
+        - Hacker News / Lobsters
+        - Discord
+        - A friend or a package manager
+        - Other
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Distro/SteamOS version, desktop or Deck, GPU, and installed Proton builds.
+      placeholder: "Bazzite 42, RTX 4060, Proton 11.0 and GE-Proton11-7"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+      description: Include the build Proton Picker chose if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Optional: paste the last lines of ~/.local/state/proton-picker/updater.log."
+      render: shell
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Sharing
+      options:
+        - label: This report may be quoted publicly without my username.
+          required: false

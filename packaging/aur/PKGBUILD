@@ -1,0 +1,45 @@
+# Maintainer: Shadoww23 <shadoww23@users.noreply.github.com>
+pkgname=proton-picker
+pkgver=0.1.0_alpha
+pkgrel=1
+pkgdesc="Automatic Proton selection for Steam Windows games"
+arch=('any')
+url="https://github.com/Shadoww23/proton-picker"
+license=('LicenseRef-Proprietary')
+depends=('python')
+optdepends=('steam: required at runtime')
+_ver=0.1.0-alpha
+source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$_ver/ProtonPicker-$_ver.tar.gz")
+sha256sums=('8f447834972d6b7719fd86d70181f27c4d6104c8f750b60eaec1bc7ec48ad5b1')
+noextract=("$pkgname-$pkgver.tar.gz")
+
+prepare() {
+  mkdir -p "$pkgname-$pkgver"
+  tar -xzf "$srcdir/$pkgname-$pkgver.tar.gz" -C "$pkgname-$pkgver"
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  python3 -m unittest test_dispatcher test_proton
+}
+
+package() {
+  install -dm755 "$pkgdir/opt/$pkgname"
+  cp -a "$srcdir/$pkgname-$pkgver/." "$pkgdir/opt/$pkgname/"
+
+  install -Dm644 "$srcdir/$pkgname-$pkgver/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$srcdir/$pkgname-$pkgver/THIRD-PARTY-NOTICES.md" \
+    "$pkgdir/usr/share/licenses/$pkgname/THIRD-PARTY-NOTICES.md"
+
+  install -dm755 "$pkgdir/usr/bin"
+  cat > "$pkgdir/usr/bin/$pkgname" <<'EOF'
+#!/bin/sh
+exec python3 /opt/proton-picker/install.py "$@"
+EOF
+  cat > "$pkgdir/usr/bin/$pkgname-uninstall" <<'EOF'
+#!/bin/sh
+exec python3 /opt/proton-picker/uninstall.py "$@"
+EOF
+  chmod 755 "$pkgdir/usr/bin/$pkgname" "$pkgdir/usr/bin/$pkgname-uninstall"
+}
