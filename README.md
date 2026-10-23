@@ -29,7 +29,13 @@ path is tested, the desktop setup below remains the supported path.
 
 ## Setup
 
-Close Steam and run this once:
+On desktop Linux, download the
+[Proton Picker Setup app](https://github.com/Shadoww23/proton-picker-installer/releases/latest).
+It checks for Steam, downloads this release, verifies its SHA-256, and runs the same
+installer described below without a terminal. The setup app is an alpha and is not
+validated on SteamOS.
+
+Prefer the terminal? Close Steam and run this once:
 
 ```sh
 ./install.sh
