@@ -20,7 +20,7 @@ proton-picker-uninstall
 
 `makepkg` runs the unit tests in `check()`.
 
-## Verified build (2026-10-21)
+## Verified build (2026-10-23)
 
 Built and installed in a clean `archlinux:latest` container:
 
@@ -33,6 +33,8 @@ sudo pacman -U proton-picker-0.1.0_alpha-1-any.pkg.tar.zst
 - `check()` unit tests passed.
 - `namcap` reported no errors. The remaining warnings are false positives for
   the local `app` module, `/bin/sh`, and `python3`.
+- The package omits Python bytecode caches, so it contains no build-directory
+  references.
 - Smoke tests passed: `proton-picker --help` and `proton-picker-uninstall`.
 
 ## Publishing to the AUR

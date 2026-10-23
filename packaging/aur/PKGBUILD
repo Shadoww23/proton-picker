@@ -20,12 +20,14 @@ prepare() {
 
 check() {
   cd "$pkgname-$pkgver"
-  python3 -m unittest test_dispatcher test_proton
+  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_dispatcher test_proton
 }
 
 package() {
   install -dm755 "$pkgdir/opt/$pkgname"
   cp -a "$srcdir/$pkgname-$pkgver/." "$pkgdir/opt/$pkgname/"
+  find "$pkgdir/opt/$pkgname" -type d -name __pycache__ -prune -exec rm -rf {} +
+  find "$pkgdir/opt/$pkgname" -type f -name '*.pyc' -delete
 
   install -Dm644 "$srcdir/$pkgname-$pkgver/LICENSE" \
     "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
