@@ -19,6 +19,14 @@ See [docs/PROBLEMS.md](docs/PROBLEMS.md) for checks, logs, and honest limits. GT
 - Python 3.10 or newer
 - At least one Proton build installed in Steam
 
+## Steam Deck
+
+Proton Picker's SteamOS path is not validated yet. A separate, read-only
+[Decky status panel](https://github.com/Shadoww23/proton-picker-decky) is available for
+sideload testing: it shows the installed version, fallback build, routed games, pins, and
+recent updater activity. It does not install Proton Picker or modify Steam. Until the Deck
+path is tested, the desktop setup below remains the supported path.
+
 ## Setup
 
 Close Steam and run this once:
